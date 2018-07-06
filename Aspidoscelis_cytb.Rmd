@@ -1,0 +1,870 @@
+---
+title: "Untitled"
+author: "JA Godoy"
+date: "6/7/2018"
+output: html_document
+---
+---
+title: "Aspidocelis_cytb"
+author: "JA Godoy"
+date: "25/4/2018"
+output: html_document
+---
+#Descrpción
+lkjsdlkjasdlkjasldkj
+
+#Inputs
+Los archivos originales de inpput son jkhsdklfjhlkjshadfkljhasdf
+
+la ruta del multifasta es: /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas
+el nombre de secuencia tiene la siguiente estructura: Prefijo_Muestra_Localidad_Linaje_Sublinaje_Subsublinaje
+la carpeta dond evamos a trabajar es: /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Carpeta_trabajo_Rstudio
+
+#Separar las secuencias por poblaciones
+Necesito un archivo donde estén marcadas las secuencias solo por poblaciones
+
+```{bash}
+cd /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/
+
+nano remove_sample_number.sh
+________________________________________
+while IFS='' read -r line || [[ -n "$line" ]];
+do
+if [[ $line = \>*  ]]
+       then
+       echo "${line}" | cut -f1,2,4 -d "_"
+       else
+       echo "${line}"
+       fi ;
+
+done < "$1"
+_______________________________________
+
+
+chmod +x remove_sample_number.sh
+./remove_sample_number.sh /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_loc.fasta  
+
+
+nano remove_sample_number.sh
+________________________________________
+while IFS='' read -r line || [[ -n "$line" ]];
+do
+if [[ $line = \>*  ]]
+       then
+       echo "${line}" | cut -f1,2,5 -d "_"
+       else
+       echo "${line}"
+       fi ;
+
+done < "$1"
+_______________________________________
+
+
+#Separar las secuencias por linajes
+Necesito un archivo donde estén marcadas las secuencias solo por linajes
+
+chmod +x rename_by_lineage.sh
+./rename_by_lineage.sh /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_lin.fasta  
+
+#Separar las secuencias por sublinajes
+Necesito un archivo donde estén marcadas las secuencias solo por sublinajes
+
+chmod +x rename_by_sublineage.sh
+./rename_by_sublineage.sh /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_sublin.fasta 
+
+#Separar las secuencias por subsublinajes
+Necesito un archivo donde estén marcadas las secuencias solo por linajes
+
+chmod +x rename_by_subsublineage.sh
+./rename_by_subsublineage.sh /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_subsublin.fasta 
+
+
+
+nano remove_sample_tag.sh
+
+
+________________________________________
+while IFS='' read -r line || [[ -n "$line" ]];
+do
+if [[ $line = \>*  ]]
+       then
+       echo "${line}" | cut -f1,2 -d "_"
+       else
+       echo "${line}"
+       fi ;
+
+done < "$1"
+_______________________________________
+
+chmod +x remove_sample_tag.sh
+
+./remove_sample_tag.sh /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_all.fasta  
+```
+
+
+
+#Fasta files separados por poblaciones a analizar por separado:
+```{bash}
+cd /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/
+
+ARRAY=($(grep ">" /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas | cut -d "_" -f4 | tr -d ">" | sort | uniq))
+for i in  ${ARRAY[*]}; 
+do
+grep "${i}" /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas -A 1  | grep -v "^--$" > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_pop-${i}.fasta
+done
+```
+
+#Fasta files separados por linajes a analizar por separado:
+
+```{bash}
+cd /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/
+
+ARRAY=($(grep ">" /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/AspCytb185hap_lin.fa | cut -d "_" -f3 | tr -d ">" | sort | uniq))
+for i in  ${ARRAY[*]}; 
+do
+grep "${i}" /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/AspCytb185hap_lin.fa -A 1  | grep -v "^--$" > /Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/AspCytb185hap_lin.fa-${i}.fasta
+done
+```
+
+#Set global parameters
+CUIDADO! copiar fuera porque setwd no funciona en Rmd
+```{r}
+
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(tidyr)
+
+setwd("/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/")
+
+```
+
+#Analisis
+##Haplotype networks
+###Calculate how each sample relate to the rest 
+list haplotype function
+```{r}
+
+library("pegas")
+
+list_haplotypes <- function(fastafile ) {
+  #read fasta
+  x <- read.dna(file=fastafile,format="fasta")
+  #Calculate haplotypes
+  h <- haplotype(x)
+  h <- sort(h, what = "label")
+  #Calculate network
+  net <- haploNet(h)
+  #calculate matrix
+  ind.hap<-with(
+    stack(setNames(attr(h, "index"), rownames(h))), 
+    table(hap=ind, pop=rownames(x)[values]) )
+  
+  ind.hap.df <- as.data.frame(ind.hap) %>% filter(Freq!=0) %>% arrange(hap) %>% select (hap,pop)
+  
+  return(ind.hap.df)
+  
+}
+
+
+#PLOT NETWORKS
+plot_network <- function(fastafile, outfile, leg.x, leg.y, text.size ) {
+  #read fasta
+  x <- read.dna(file=fastafile,format="fasta")
+  #Calculate haplotypes
+  h <- haplotype(x)
+  h <- sort(h, what = "label")
+  #Calculate network
+  net <- haploNet(h)
+  #calculate matrix
+  ind.hap<-with(
+    stack(setNames(attr(h, "index"), rownames(h))), 
+    table(hap=ind, pop=rownames(x)[values]) )
+  
+  setEPS()
+  postscript(outfile)
+  plot(net, size=attr(net, "freq"), scale.ratio = 5, cex = text.size, offset = 5, pie=ind.hap, fast=TRUE)
+  legend(leg.x ,leg.y , colnames(ind.hap), col=rainbow(ncol(ind.hap)), pch=12,ncol=3)
+  dev.off()
+  
+}
+
+  data.frame(lapply(bob, as.character), )
+
+#Per_pop samples
+all.df <- list_haplotypes("/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612.fas") %>%
+  mutate (hap=paste("H_",sprintf("%03d",as.numeric(as.roman(as.character(hap)))),sep = "")    ,
+          sample=pop )%>%
+  separate(pop, c("sp", "locus", "samplecode", "pop", "lineage", "sublineage"), sep = "_")  %>%
+  arrange(hap) 
+
+ind.hap.pop <- all.df %>%
+                group_by(hap,pop)%>%
+                summarise(count=n()) %>%
+                spread(key = pop,value = count,fill=0)
+
+write.csv(ind.hap.pop, "/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Tablas_haplotipos/aspcytb315_612_pop_haplotypes.csv", row.names = FALSE)
+
+#Per_lineage samples
+ind.hap.lineage <- all.df %>%
+                group_by(hap,lineage)%>%
+                summarise(count=n()) %>%
+                spread(key = lineage,value = count,fill=0)
+
+write.csv(ind.hap.lineage, "/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Tablas_haplotipos/aspcytb315_612_lineage_haplotypes.csv", row.names = FALSE)
+
+#Pop_vs_Lineage
+ind.pop.lineage <- all.df %>%
+                group_by(pop,lineage)%>%
+                summarise(count=n()) %>%
+                spread(key = lineage,value = count,fill=0)
+
+write.csv(ind.pop.lineage, "/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Tablas_haplotipos/aspcytb315_612_pop_lineages.csv", row.names = FALSE)
+
+#Pop_vs_sublineage
+ind.pop.sublineage <- all.df %>%
+                group_by(pop,sublineage)%>%
+                summarise(count=n()) %>%
+                spread(key = sublineage,value = count,fill=0)
+
+write.csv(ind.pop.sublineage, "/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Tablas_haplotipos/aspcytb315_612_pop_sublineages.csv", row.names = FALSE)
+
+#Draw haplotypes piecharts per location
+ind.hap.pop2 <- read.csv("/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Tablas_haplotipos/aspcytb315_612_pop_haplotypes.csv") %>%
+   gather(pop, Freq, -hap)
+$Si quieres contar por haplogrupo e vex de por haplotipo cambiar por qué agrupar
+Hap <-   filter (ind.hap.pop2, Freq>0) %>% group_by(., pop) %>% summarise(., sample.size = sum(Freq) ) #Counts how many haplotypes appear per population 
+hap_df<- full_join(ind.hap.pop, Hap) %>%
+  mutate (hap_freq=Freq/sample.size )
+
+#Create colour palette
+
+hap_col <- read.csv("/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/haplogroups.csv", sep=";") 
+
+color <- c()
+for ( i in 1:length(hap_col$n)){
+color[i] <- brewer.pal( hap_col$n[i], as.character(hap_col$palette[i]))[hap_col$intensity[i]]
+}
+
+hap_col$color <- color
+ 
+hap_df_col <-full_join(hap_df,hap_col)
+color2 <- select(hap_df_col,hap,color) %>% unique() %>% arrange(hap)
+
+
+
+
+#Reorder factors so I can see the haplogroups together
+
+# #Create colour palette
+# hap_col <- select(hap_df, hap_name, Freq) %>% 
+#   filter(Freq>=1) %>% 
+#   group_by(hap_name) %>% 
+#   summarise(present_pops=n()) %>%
+#   mutate(singleton=ifelse(present_pops==1,1,0)) %>%
+#   group_by(singleton) %>% 
+#   mutate(number = seq_along(singleton),
+#           col=ifelse(singleton==1, colorRampPalette(brewer.pal(9,"Greys"))(19)[number],
+#           col=ifelse(singleton==1, colorRampPalette(brewer.pal(9,"BrBG"))(19)[number],
+#           brewer.pal(6,"Set1")[number] ))%>%
+#   arrange(singleton) )
+# #Reorder factors so I can see first hared and then private
+# hap_df$hap_name <- factor(hap_df$hap_name, levels = hap_col$hap_name)
+
+
+#Raw plot trials
+pd <- position_dodge(0.6) # move them .05 to the left and right
+theme_set(theme_gray(base_size = 24))
+ggplot(hap_df_col, aes(x=sample.size/2, y=hap_freq, fill=factor(hap), width = sample.size )) +
+  geom_bar(position="fill", stat="identity") + 
+  coord_polar("y") +
+  theme_bw() +
+  facet_wrap(~ pop, nrow = 3, ncol = 5) +
+  scale_fill_manual(values = color2$color)+
+  theme(axis.text.x = element_blank(), legend.position="bottom") +
+  guides(fill=guide_legend(ncol = 5,byrow=TRUE))
+
+ggsave("/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/networks/per_pop_pies_color.eps")
+write.csv(ind.hap.pop, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop_haplotypes.csv")
+
+```
+
+##Diversity  and differentiation stats
+Stats per pop
+ in the /Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/fasta folder I place the
+ /Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed.fasta file as there is no 
+ 
+JA: Creo carpeta popgen_stats y pongo las secuencias orginales aspcytb315_612.fas
+```{r}
+library("pegas")
+library("PopGenome")
+#Dentro de una carpeta generada solo para ello pon el fasta original
+
+per_pop <- readData ("/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/Aspidoscelis_Cytb/popgen_stats/")
+get.sum.data(per_pop)
+get.individuals(per_pop)
+#Camboa pops a lineages aquí si quieres
+per_pop <- set.populations(per_pop,list(
+c("c_ll_ya_0138", "c_ll_ya_0139", "c_ll_ya_0140", "c_ll_ya_0142", "c_ll_ya_0143", "c_ll_ya_0145", "c_ll_ya_0146", "c_ll_ya_0147"),
+c("c_ll_ki_0086", "c_ll_ki_0088", "c_ll_ki_0090", "c_ll_ki_0091", "c_ll_ki_0092", "c_ll_ki_0093", "c_ll_ki_0094", "c_ll_ki_0095", "c_ll_ki_0096", "c_ll_ki_0097", "c_ll_ki_0098", "c_ll_ki_0099", "c_ll_ki_0100", "c_ll_ki_0101", "c_ll_ki_0102"),
+c("c_ll_vl_0107", "c_ll_vl_0108", "c_ll_vl_0109", "c_ll_vl_0110", "c_ll_vl_0112", "c_ll_vl_0113", "c_ll_vl_0128", "c_ll_vl_0132"),
+c("c_ll_tu_0153", "c_ll_tu_0157", "c_ll_tu_0158", "c_ll_tu_0159", "c_ll_tu_0165", "c_ll_tu_0166"),
+c("c_ll_mo_0181", "c_ll_mo_0184", "c_ll_mo_0186", "c_ll_mo_0187", "c_ll_mo_0188", "c_ll_mo_0189", "c_ll_mo_0190", "c_ll_mo_0191"),
+c("c_ll_cr_0205", "c_ll_cr_0206", "c_ll_cr_0207", "c_ll_cr_0208", "c_ll_cr_0209", "c_ll_cr_0212"),
+c("c_ll_la_0044", "c_ll_la_0047", "c_ll_la_0048", "c_ll_la_0052", "c_ll_la_0053", "c_ll_la_0054"),
+c("c_ll_po_0001", "c_ll_po_0002", "c_ll_po_0003", "c_ll_po_0004", "c_ll_po_0005", "c_ll_po_0007", "c_ll_po_0010", "c_ll_po_0011", "c_ll_po_0014", "c_ll_po_0017", "c_ll_po_0019", "c_ll_po_0105", "c_ll_po_0106"),
+c("c_ll_no_0063", "c_ll_no_0064", "c_ll_no_0065", "c_ll_no_0068", "c_ll_no_0069", "c_ll_no_0070", "c_ll_no_0071", "c_ll_no_0072", "c_ll_no_0074", "c_ll_no_0075", "c_ll_no_0076", "c_ll_no_0077", "c_ll_no_0078", "c_ll_no_0079", "c_ll_no_0080", "c_ll_no_0081", "c_ll_no_0082"),
+c("c_ll_ba_0214", "c_ll_ba_0215", "c_ll_ba_0216"),
+c("c_ll_ur_0194", "c_ll_ur_0195", "c_ll_ur_0196", "c_ll_ur_0199", "c_ll_ur_0200", "c_ll_ur_0203") ))
+
+per_pop <- readData ("/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/Aspidoscelis_Cytb/popgen_stats/")
+get.sum.data(per_pop)
+get.individuals(per_pop)
+per_pop <- set.populations(per_pop,list(
+#AllLineagepartions
+c("Ahy_cytb_CM07_COMITAN_A1_A11", "Ahy_cytb_CM08_COMITAN_A1_A11", "Ahy_cytb_COM4_COMITAN_A1_A11", "Ahy_cytb_ES1-01_ESANTO1_A1_A11", "Ahy_cytb_ES1-02_ESANTO1_A1_A11", "Ahy_cytb_ES1-04_ESANTO1_A1_A11", "Ahy_cytb_ES2-14_ESANTO2_A1_A11", "Ahy_cytb_ES2-15_ESANTO2_A1_A11", "Ahy_cytb_ES1-03_ESANTO1_A1_A11", "Ahy_cytb_ES1-06_ESANTO1_A1_A11", "Ahy_cytb_ES2-07_ESANTO2_A1_A11", "Ahy_cytb_ES2-09_ESANTO2_A1_A11", "Ahy_cytb_ES2-10_ESANTO2_A1_A11", "Ahy_cytb_ES2-11_ESANTO2_A1_A11", "Ahy_cytb_ES2-16_ESANTO2_A1_A11", "Ahy_cytb_ES2-18_ESANTO2_A1_A11", "Ahy_cytb_ES2-21_ESANTO2_A1_A11", "Ahy_cytb_ES1-05_ESANTO1_A1_A11", "Ahy_cytb_ES2-08_ESANTO2_A1_A11", "Ahy_cytb_TECO18_ELTECOLOTE_A1_A11", "Ahy_cytb_ES2-12_ESANTO2_A1_A11", "Ahy_cytb_BAL01_BOCADELALAMO_A1_A11", "Ahy_cytb_BAR02_SANBARTOLO_A1_A11", "Ahy_cytb_BARB4_SANBARTOLOB_A1_A11", "Ahy_cytb_ET003_ELTRIUNFO_A1_A11", "Ahy_cytb_PSM02_PLANESSANTAM_A1_A11", "Ahy_cytb_ET002_ELTRIUNFO_A1_A11", "Ahy_cytb_PSM01_PLANESSANTAM_A1_A11", "Ahy_cytb_ANC02_ELANCON_A1_A11", "Ahy_cytb_ANC03_ELANCON_A1_A11", "Ahy_cytb_ANC04_ELANCON_A1_A11", "Ahy_cytb_BAL02_BOCADELALAMO_A1_A11", "Ahy_cytb_BAL2-3_BOCADELALAMO2_A1_A11", "Ahy_cytb_BAL03_BOCADELALAMO_A1_A11", "Ahy_cytb_BAL05_BOCADELALAMO_A1_A11", "Ahy_cytb_PSM04_PLANESSANTAM_A1_A11", "Ahy_cytb_K23-1_KILOMETRO23_A1_A11", "Ahy_cytb_K23-5_KILOMETRO23_A1_A11", "Ahy_cytb_K46-3_KILOMETRO46_A1_A11", "Ahy_cytb_K23-2_KILOMETRO23_A1_A11", 
+"Ahy_cytb_K23-4_KILOMETRO23_A1_A11", "Ahy_cytb_K46-1_KILOMETRO46_A1_A11", "Ahy_cytb_K46-2_KILOMETRO46_A1_A11", "Ahy_cytb_COM35_COMITAN_A1_A11", "Ahy_cytb_COM40_COMITAN_A1_A11", "Ahy_cytb_PLC01_PLAYITACONCEP_A1_A11", "Ahy_cytb_TECO1_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO10_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO11_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO13_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO14_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO2_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO5_ELTECOLOTE_A1_A11", "Ahy_cytb_PSM03_PLANESSANTAM_A1_A11", "Ahy_cytb_PSM05_PLANESSANTAM_A1_A11", "Ahy_cytb_TECO20_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO3_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO9_ELTECOLOTE_A1_A11", "Ahy_cytb_K90-1_KILOMETRO90_A1_A11", "Ahy_cytb_COM24_COMITAN_A1_A11", "Ahy_cytb_COM30_COMITAN_A1_A11", "Ahy_cytb_COM37_COMITAN_A1_A11", "Ahy_cytb_COM31_COMITAN_A1_A11", "Ahy_cytb_COM33_COMITAN_A1_A11", "Ahy_cytb_ES2-13_ESANTO2_A1_A11", "Ahy_cytb_ES2-17_ESANTO2_A1_A11", "Ahy_cytb_ES2-19_ESANTO2_A1_A11", "Ahy_cytb_ES2-20_ESANTO2_A1_A11", "Ahy_cytb_ES2-22_ESANTO2_A1_A11", "Ahy_cytb_TECO12_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO7_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO15_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO17_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO16_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO4_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO8_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO19_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO6_ELTECOLOTE_A1_A11", "Ahy_cytb_EP01_ELPOTRERO_A1_A12", 
+"Ahy_cytb_EP02_ELPOTRERO_A1_A12", "Ahy_cytb_EP03_ELPOTRERO_A1_A12", "Ahy_cytb_EP06_ELPOTRERO_A1_A12", "Ahy_cytb_EP07_ELPOTRERO_A1_A12", "Ahy_cytb_EP08_ELPOTRERO_A1_A12", "Ahy_cytb_K100-10_KILOMETRO100_A1_A12", "Ahy_cytb_BAJ13_ELBAJO_A1_A12", "Ahy_cytb_K100-01_KILOMETRO100_A1_A12", "Ahy_cytb_K100-02_KILOMETRO100_A1_A12", "Ahy_cytb_K100-05_KILOMETRO100_A1_A12", "Ahy_cytb_K100-11_KILOMETRO100_A1_A12", "Ahy_cytb_K100-21_KILOMETRO100_A1_A12", "Ahy_cytb_K100-23_KILOMETRO100_A1_A12", "Ahy_cytb_K100-03_KILOMETRO100_A1_A12", "Ahy_cytb_K100-19_KILOMETRO100_A1_A12", "Ahy_cytb_K100-24_KILOMETRO100_A1_A12", "Ahy_cytb_K100-07_KILOMETRO100_A1_A12", "Ahy_cytb_K100-12_KILOMETRO100_A1_A12", "Ahy_cytb_K100-14_KILOMETRO100_A1_A12", "Ahy_cytb_K23-3_KILOMETRO23_A1_A12", "Ahy_cytb_K55-1_KILOMETRO55_A1_A12", "Ahy_cytb_K55-3_KILOMETRO55_A1_A12", "Ahy_cytb_K90-3_KILOMETRO90_A1_A12", "Ahy_cytb_CON02_ELCONEJO_A1_A12", "Ahy_cytb_CON03_ELCONEJO_A1_A12", "Ahy_cytb_CON04_ELCONEJO_A1_A12", "Ahy_cytb_IHV01_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV02_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV03_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV04_PRESAIHUAZIL_A1_A12", "Ahy_cytb_INS03_INSURGENTES_A1_A12", "Ahy_cytb_SCA01_SANCARLOS_A1_A12", "Ahy_cytb_SCA04_SANCARLOS_A1_A12", "Ahy_cytb_SCA02_SANCARLOS_A1_A12", "Ahy_cytb_LOM01_LOMA_A1_A12", "Ahy_cytb_SCA05_SANCARLOS_A1_A12", "Ahy_cytb_K100-18_KILOMETRO100_A1_A12", "Ahy_cytb_K100-20_KILOMETRO100_A1_A12", 
+"Ahy_cytb_K100-22_KILOMETRO100_A1_A12", "Ahy_cytb_K100-4_KILOMETRO100_A1_A12", "Ahy_cytb_K100-13_KILOMETRO100_A1_A12", "Ahy_cytb_K100-8_KILOMETRO100_A1_A12", "Ahy_cytb_K100-15_KILOMETRO100_A1_A12", "Ahy_cytb_K100-16_KILOMETRO100_A1_A12", "Ahy_cytb_RIT1_SANTARITA_A1_A12", "Ahy_cytb_RIT3_SANTARITA_A1_A12", "Ahy_cytb_RIT2_SANTARITA_A1_A12", "Ahy_cytb_RIT4_SANTARITA_A1_A12", "Ahy_cytb_ICO01_ISLACORONADO_A1_A13", "Ahy_cytb_ICO03_ISLACORONADO_A1_A13", "Ahy_cytb_ICO04_ISLACORONADO_A1_A13", "Ahy_cytb_ICO10_ISLACORONADO_A1_A13", "Ahy_cytb_ICO11_ISLACORONADO_A1_A13", "Ahy_cytb_ICO15_ISLACORONADO_A1_A13", "Ahy_cytb_ICO18_ISLACORONADO_A1_A13", "Ahy_cytb_ICO21_ISLACORONADO_A1_A13", "Ahy_cytb_ICO02_ISLACORONADO_A1_A13", "Ahy_cytb_ICO05_ISLACORONADO_A1_A13", "Ahy_cytb_ICO06_ISLACORONADO_A1_A13", "Ahy_cytb_ICO07_ISLACORONADO_A1_A13", "Ahy_cytb_ICO08_ISLACORONADO_A1_A13", "Ahy_cytb_ICO12_ISLACORONADO_A1_A13", "Ahy_cytb_ICO19_ISLACORONADO_A1_A13", "Ahy_cytb_ICO20_ISLACORONADO_A1_A13", "Ahy_cytb_RDE01_RANCHODONENRIQUE_A1_A13", "Ahy_cytb_RDE02_RANCHODONENRIQUE_A1_A13", "Ahy_cytb_ICO16_ISLACORONADO_A1_A13", "Ahy_cytb_ICO17_ISLACORONADO_A1_A13", "Ahy_cytb_ICO9_ISLACORONADO_A1_A13", "Ahy_cytb_BAJ9_ELBAJO_A1_A13", "Ahy_cytb_ICO13_ISLACORONADO_A1_A13", "Ahy_cytb_BAJ11_ELBAJO_A1_A13", "Ahy_cytb_BAJ14_ELBAJO_A1_A13", "Ahy_cytb_BAJ22_ELBAJO_A1_A13", "Ahy_cytb_PUR01_LAPURISIMA_A1_A14", "Ahy_cytb_PUR02_LAPURISIMA_A1_A14", 
+"Ahy_cytb_PUR03_LAPURISIMA_A1_A14", "Ahy_cytb_AGV01_AGUAVERDE_A1_A14", "Ahy_cytb_INS01_INSURGENTES_A1_A14", "Ahy_cytb_INS02_INSURGENTES_A1_A14", "Ahy_cytb_AGV02_AGUAVERDE_A1_A14", "Ahy_cytb_AGV03_AGUAVERDE_A1_A14", "Ahy_cytb_AGV04_AGUAVERDE_A1_A14", "Ahy_cytb_JAV1_SANJAVIER_A1_A14", "Ahy_cytb_JAV2_SANJAVIER_A1_A14", "Ahy_cytb_JAV3_SANJAVIER_A1_A14", "Ahy_cytb_JAV5_SANJAVIER_A1_A14", "Ahy_cytb_BAJ10_ELBAJO_A1_A14", "Ahy_cytb_BAJ1_ELBAJO_A1_A14", "Ahy_cytb_BAJ12_ELBAJO_A1_A14", "Ahy_cytb_BAJ18_ELBAJO_A1_A14", "Ahy_cytb_BAJ19_ELBAJO_A1_A14", "Ahy_cytb_BAJ20_ELBAJO_A1_A14", "Ahy_cytb_BAJ3_ELBAJO_A1_A14", "Ahy_cytb_BAJ5_ELBAJO_A1_A14", "Ahy_cytb_BAJ6_ELBAJO_A1_A14", "Ahy_cytb_BAJ7_ELBAJO_A1_A14", "Ahy_cytb_BAJ8_ELBAJO_A1_A14", "Ahy_cytb_BAJ15_ELBAJO_A1_A14", "Ahy_cytb_BAJ17_ELBAJO_A1_A14", "Ahy_cytb_BAJ4_ELBAJO_A1_A14", "Ahy_cytb_K100-39_KILOMETRO100_A1_A15", "Ahy_cytb_CM01_COMITAN_A2_A2", "Ahy_cytb_CM03_COMITAN_A2_A2", "Ahy_cytb_CM06_COMITAN_A2_A2", "Ahy_cytb_CMO4_COMITAN_A2_A2", "Ahy_cytb_COM21_COMITAN_A2_A2", "Ahy_cytb_COM34_COMITAN_A2_A2", "Ahy_cytb_COM38_COMITAN_A2_A2", "Ahy_cytb_CM05_COMITAN_A2_A2", "Ahy_cytb_COM20_COMITAN_A2_A2", "Ahy_cytb_TS02_TODOSANTOS_A2_A2", "Ahy_cytb_TS04_TODOSANTOS_A2_A2", "Ahy_cytb_TS05_TODOSANTOS_A2_A2", "Ahy_cytb_TS06_TODOSANTOS_A2_A2", "Ahy_cytb_TS07_TODOSANTOS_A2_A2", "Ahy_cytb_TS08_TODOSANTOS_A2_A2", "Ahy_cytb_CSL03_CABOSANLUCAS_A2_A2", "Ahy_cytb_MIG01_MIGRINO_A2_A2", 
+"Ahy_cytb_SAS01_SANANTONIO_A2_A2", "Ahy_cytb_MIG02_MIGRINO_A2_A2", "Ahy_cytb_SAS02_SANANTONIO_A2_A2", "Ahy_cytb_STE02_SANTATERESITA_A2_A2", "Ahy_cytb_ANC01_ELANCON_A2_A2", "Ahy_cytb_ANC05_ELANCON_A2_A2", "Ahy_cytb_ET004_ELTRIUNFO_A2_A2", "Ahy_cytb_GASP1_GASPAREO_A2_A2", "Ahy_cytb_GASP2_GASPAREO_A2_A2", "Ahy_cytb_BUR02_LABURRERA_A2_A2", "Ahy_cytb_GASP3_GASPAREO_A2_A2", "Ahy_cytb_INO01_INOCENTES_A2_A2", "Ahy_cytb_INO02_INOCENTES_A2_A2", "Ahy_cytb_INO03_INOCENTES_A2_A2", "Ahy_cytb_INO04_INOCENTES_A2_A2", "Ahy_cytb_K55-2_KILOMETRO55_A2_A2", "Ahy_cytb_MIG04_MIGRINO_A2_A2", "Ahy_cytb_MIG05_MIGRINO_A2_A2", "Ahy_cytb_PLC02_PLAYITACONCEP_A2_A2", "Ahy_cytb_PLC03_PLAYITACONCEP_A2_A2", "Ahy_cytb_PLC04_PLAYITACONCEP_A2_A2", "Ahy_cytb_STE01_SANTATERESITA_A2_A2", "Ahy_cytb_BUR01_LABURRERA_A2_A2", "Ahy_cytb_BUR03_LABURRERA_A2_A2", "Ahy_cytb_COM19_COMITAN_A2_A2", "Ahy_cytb_COM22_COMITAN_A2_A2", "Ahy_cytb_COM23_COMITAN_A2_A2", "Ahy_cytb_COM26_COMITAN_A2_A2", "Ahy_cytb_COM28_COMITAN_A2_A2", "Ahy_cytb_COM29_COMITAN_A2_A2", "Ahy_cytb_COM32_COMITAN_A2_A2", "Ahy_cytb_COM36_COMITAN_A2_A2", "Ahy_cytb_COM2_COMITAN_A2_A2", "Ahy_cytb_COM27_COMITAN_A2_A2", "Ahy_cytb_COM25_COMITAN_A2_A2", "Ahy_cytb_ISF01_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF02_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF03_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF04_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF05_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF06_ISLASANFRANCISCO_A3_A3", 
+"Ahy_cytb_ISF07_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF08_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISJ07_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ01_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ02_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ06_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ03_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ08_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ09_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ04_ISLASANJOSE_A3_A3", "Ahy_cytb_IMO01_ISLAMONTSERRAT_A4_A4", "Ahy_cytb_IMO02_ISLAMONTSERRAT_A4_A4"),
+c("Ahy_cytb_CM07_COMITAN_A1_A11", "Ahy_cytb_CM08_COMITAN_A1_A11", "Ahy_cytb_COM4_COMITAN_A1_A11", "Ahy_cytb_ES1-01_ESANTO1_A1_A11", "Ahy_cytb_ES1-02_ESANTO1_A1_A11", "Ahy_cytb_ES1-04_ESANTO1_A1_A11", "Ahy_cytb_ES2-14_ESANTO2_A1_A11", "Ahy_cytb_ES2-15_ESANTO2_A1_A11", "Ahy_cytb_ES1-03_ESANTO1_A1_A11", "Ahy_cytb_ES1-06_ESANTO1_A1_A11", "Ahy_cytb_ES2-07_ESANTO2_A1_A11", "Ahy_cytb_ES2-09_ESANTO2_A1_A11", "Ahy_cytb_ES2-10_ESANTO2_A1_A11", "Ahy_cytb_ES2-11_ESANTO2_A1_A11", "Ahy_cytb_ES2-16_ESANTO2_A1_A11", "Ahy_cytb_ES2-18_ESANTO2_A1_A11", "Ahy_cytb_ES2-21_ESANTO2_A1_A11", "Ahy_cytb_ES1-05_ESANTO1_A1_A11", "Ahy_cytb_ES2-08_ESANTO2_A1_A11", "Ahy_cytb_TECO18_ELTECOLOTE_A1_A11", "Ahy_cytb_ES2-12_ESANTO2_A1_A11", "Ahy_cytb_BAL01_BOCADELALAMO_A1_A11", "Ahy_cytb_BAR02_SANBARTOLO_A1_A11", "Ahy_cytb_BARB4_SANBARTOLOB_A1_A11", "Ahy_cytb_ET003_ELTRIUNFO_A1_A11", "Ahy_cytb_PSM02_PLANESSANTAM_A1_A11", "Ahy_cytb_ET002_ELTRIUNFO_A1_A11", "Ahy_cytb_PSM01_PLANESSANTAM_A1_A11", "Ahy_cytb_ANC02_ELANCON_A1_A11", "Ahy_cytb_ANC03_ELANCON_A1_A11", "Ahy_cytb_ANC04_ELANCON_A1_A11", "Ahy_cytb_BAL02_BOCADELALAMO_A1_A11", "Ahy_cytb_BAL2-3_BOCADELALAMO2_A1_A11", "Ahy_cytb_BAL03_BOCADELALAMO_A1_A11", "Ahy_cytb_BAL05_BOCADELALAMO_A1_A11", "Ahy_cytb_PSM04_PLANESSANTAM_A1_A11", "Ahy_cytb_K23-1_KILOMETRO23_A1_A11", "Ahy_cytb_K23-5_KILOMETRO23_A1_A11", "Ahy_cytb_K46-3_KILOMETRO46_A1_A11", "Ahy_cytb_K23-2_KILOMETRO23_A1_A11", 
+"Ahy_cytb_K23-4_KILOMETRO23_A1_A11", "Ahy_cytb_K46-1_KILOMETRO46_A1_A11", "Ahy_cytb_K46-2_KILOMETRO46_A1_A11", "Ahy_cytb_COM35_COMITAN_A1_A11", "Ahy_cytb_COM40_COMITAN_A1_A11", "Ahy_cytb_PLC01_PLAYITACONCEP_A1_A11", "Ahy_cytb_TECO1_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO10_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO11_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO13_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO14_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO2_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO5_ELTECOLOTE_A1_A11", "Ahy_cytb_PSM03_PLANESSANTAM_A1_A11", "Ahy_cytb_PSM05_PLANESSANTAM_A1_A11", "Ahy_cytb_TECO20_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO3_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO9_ELTECOLOTE_A1_A11", "Ahy_cytb_K90-1_KILOMETRO90_A1_A11", "Ahy_cytb_COM24_COMITAN_A1_A11", "Ahy_cytb_COM30_COMITAN_A1_A11", "Ahy_cytb_COM37_COMITAN_A1_A11", "Ahy_cytb_COM31_COMITAN_A1_A11", "Ahy_cytb_COM33_COMITAN_A1_A11", "Ahy_cytb_ES2-13_ESANTO2_A1_A11", "Ahy_cytb_ES2-17_ESANTO2_A1_A11", "Ahy_cytb_ES2-19_ESANTO2_A1_A11", "Ahy_cytb_ES2-20_ESANTO2_A1_A11", "Ahy_cytb_ES2-22_ESANTO2_A1_A11", "Ahy_cytb_TECO12_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO7_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO15_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO17_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO16_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO4_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO8_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO19_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO6_ELTECOLOTE_A1_A11", "Ahy_cytb_EP01_ELPOTRERO_A1_A12", 
+"Ahy_cytb_EP02_ELPOTRERO_A1_A12", "Ahy_cytb_EP03_ELPOTRERO_A1_A12", "Ahy_cytb_EP06_ELPOTRERO_A1_A12", "Ahy_cytb_EP07_ELPOTRERO_A1_A12", "Ahy_cytb_EP08_ELPOTRERO_A1_A12", "Ahy_cytb_K100-10_KILOMETRO100_A1_A12", "Ahy_cytb_BAJ13_ELBAJO_A1_A12", "Ahy_cytb_K100-01_KILOMETRO100_A1_A12", "Ahy_cytb_K100-02_KILOMETRO100_A1_A12", "Ahy_cytb_K100-05_KILOMETRO100_A1_A12", "Ahy_cytb_K100-11_KILOMETRO100_A1_A12", "Ahy_cytb_K100-21_KILOMETRO100_A1_A12", "Ahy_cytb_K100-23_KILOMETRO100_A1_A12", "Ahy_cytb_K100-03_KILOMETRO100_A1_A12", "Ahy_cytb_K100-19_KILOMETRO100_A1_A12", "Ahy_cytb_K100-24_KILOMETRO100_A1_A12", "Ahy_cytb_K100-07_KILOMETRO100_A1_A12", "Ahy_cytb_K100-12_KILOMETRO100_A1_A12", "Ahy_cytb_K100-14_KILOMETRO100_A1_A12", "Ahy_cytb_K23-3_KILOMETRO23_A1_A12", "Ahy_cytb_K55-1_KILOMETRO55_A1_A12", "Ahy_cytb_K55-3_KILOMETRO55_A1_A12", "Ahy_cytb_K90-3_KILOMETRO90_A1_A12", "Ahy_cytb_K100-39_KILOMETRO100_A1_A15", "Ahy_cytb_CON02_ELCONEJO_A1_A12", "Ahy_cytb_CON03_ELCONEJO_A1_A12", "Ahy_cytb_CON04_ELCONEJO_A1_A12", "Ahy_cytb_IHV01_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV02_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV03_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV04_PRESAIHUAZIL_A1_A12", "Ahy_cytb_INS03_INSURGENTES_A1_A12", "Ahy_cytb_SCA01_SANCARLOS_A1_A12", "Ahy_cytb_SCA04_SANCARLOS_A1_A12", "Ahy_cytb_SCA02_SANCARLOS_A1_A12", "Ahy_cytb_LOM01_LOMA_A1_A12", "Ahy_cytb_SCA05_SANCARLOS_A1_A12", "Ahy_cytb_K100-18_KILOMETRO100_A1_A12", "Ahy_cytb_K100-20_KILOMETRO100_A1_A12", 
+"Ahy_cytb_K100-22_KILOMETRO100_A1_A12", "Ahy_cytb_K100-4_KILOMETRO100_A1_A12", "Ahy_cytb_K100-13_KILOMETRO100_A1_A12", "Ahy_cytb_K100-8_KILOMETRO100_A1_A12", "Ahy_cytb_K100-15_KILOMETRO100_A1_A12", "Ahy_cytb_K100-16_KILOMETRO100_A1_A12", "Ahy_cytb_RIT1_SANTARITA_A1_A12", "Ahy_cytb_RIT3_SANTARITA_A1_A12", "Ahy_cytb_RIT2_SANTARITA_A1_A12", "Ahy_cytb_RIT4_SANTARITA_A1_A12", "Ahy_cytb_ICO01_ISLACORONADO_A1_A13", "Ahy_cytb_ICO03_ISLACORONADO_A1_A13", "Ahy_cytb_ICO04_ISLACORONADO_A1_A13", "Ahy_cytb_ICO10_ISLACORONADO_A1_A13", "Ahy_cytb_ICO11_ISLACORONADO_A1_A13", "Ahy_cytb_ICO15_ISLACORONADO_A1_A13", "Ahy_cytb_ICO18_ISLACORONADO_A1_A13", "Ahy_cytb_ICO21_ISLACORONADO_A1_A13", "Ahy_cytb_ICO02_ISLACORONADO_A1_A13", "Ahy_cytb_ICO05_ISLACORONADO_A1_A13", "Ahy_cytb_ICO06_ISLACORONADO_A1_A13", "Ahy_cytb_ICO07_ISLACORONADO_A1_A13", "Ahy_cytb_ICO08_ISLACORONADO_A1_A13", "Ahy_cytb_ICO12_ISLACORONADO_A1_A13", "Ahy_cytb_ICO19_ISLACORONADO_A1_A13", "Ahy_cytb_ICO20_ISLACORONADO_A1_A13", "Ahy_cytb_RDE01_RANCHODONENRIQUE_A1_A13", "Ahy_cytb_RDE02_RANCHODONENRIQUE_A1_A13", "Ahy_cytb_ICO16_ISLACORONADO_A1_A13", "Ahy_cytb_ICO17_ISLACORONADO_A1_A13", "Ahy_cytb_ICO9_ISLACORONADO_A1_A13", "Ahy_cytb_BAJ9_ELBAJO_A1_A13", "Ahy_cytb_ICO13_ISLACORONADO_A1_A13", "Ahy_cytb_BAJ11_ELBAJO_A1_A13", "Ahy_cytb_BAJ14_ELBAJO_A1_A13", "Ahy_cytb_BAJ22_ELBAJO_A1_A13", "Ahy_cytb_PUR01_LAPURISIMA_A1_A14", "Ahy_cytb_PUR02_LAPURISIMA_A1_A14", 
+"Ahy_cytb_PUR03_LAPURISIMA_A1_A14", "Ahy_cytb_AGV01_AGUAVERDE_A1_A14", "Ahy_cytb_INS01_INSURGENTES_A1_A14", "Ahy_cytb_INS02_INSURGENTES_A1_A14", "Ahy_cytb_AGV02_AGUAVERDE_A1_A14", "Ahy_cytb_AGV03_AGUAVERDE_A1_A14", "Ahy_cytb_AGV04_AGUAVERDE_A1_A14", "Ahy_cytb_JAV1_SANJAVIER_A1_A14", "Ahy_cytb_JAV2_SANJAVIER_A1_A14", "Ahy_cytb_JAV3_SANJAVIER_A1_A14", "Ahy_cytb_JAV5_SANJAVIER_A1_A14", "Ahy_cytb_BAJ10_ELBAJO_A1_A14", "Ahy_cytb_BAJ1_ELBAJO_A1_A14", "Ahy_cytb_BAJ12_ELBAJO_A1_A14", "Ahy_cytb_BAJ18_ELBAJO_A1_A14", "Ahy_cytb_BAJ19_ELBAJO_A1_A14", "Ahy_cytb_BAJ20_ELBAJO_A1_A14", "Ahy_cytb_BAJ3_ELBAJO_A1_A14", "Ahy_cytb_BAJ5_ELBAJO_A1_A14", "Ahy_cytb_BAJ6_ELBAJO_A1_A14", "Ahy_cytb_BAJ7_ELBAJO_A1_A14", "Ahy_cytb_BAJ8_ELBAJO_A1_A14", "Ahy_cytb_BAJ15_ELBAJO_A1_A14", "Ahy_cytb_BAJ17_ELBAJO_A1_A14", "Ahy_cytb_BAJ4_ELBAJO_A1_A14"), 
+c("Ahy_cytb_CM07_COMITAN_A1_A11", "Ahy_cytb_CM08_COMITAN_A1_A11", "Ahy_cytb_COM4_COMITAN_A1_A11", "Ahy_cytb_ES1-01_ESANTO1_A1_A11", "Ahy_cytb_ES1-02_ESANTO1_A1_A11", "Ahy_cytb_ES1-04_ESANTO1_A1_A11", "Ahy_cytb_ES2-14_ESANTO2_A1_A11", "Ahy_cytb_ES2-15_ESANTO2_A1_A11", "Ahy_cytb_ES1-03_ESANTO1_A1_A11", "Ahy_cytb_ES1-06_ESANTO1_A1_A11", "Ahy_cytb_ES2-07_ESANTO2_A1_A11", "Ahy_cytb_ES2-09_ESANTO2_A1_A11", "Ahy_cytb_ES2-10_ESANTO2_A1_A11", "Ahy_cytb_ES2-11_ESANTO2_A1_A11", "Ahy_cytb_ES2-16_ESANTO2_A1_A11", "Ahy_cytb_ES2-18_ESANTO2_A1_A11", "Ahy_cytb_ES2-21_ESANTO2_A1_A11", "Ahy_cytb_ES1-05_ESANTO1_A1_A11", "Ahy_cytb_ES2-08_ESANTO2_A1_A11", "Ahy_cytb_TECO18_ELTECOLOTE_A1_A11", "Ahy_cytb_ES2-12_ESANTO2_A1_A11", "Ahy_cytb_BAL01_BOCADELALAMO_A1_A11", "Ahy_cytb_BAR02_SANBARTOLO_A1_A11", "Ahy_cytb_BARB4_SANBARTOLOB_A1_A11", "Ahy_cytb_ET003_ELTRIUNFO_A1_A11", "Ahy_cytb_PSM02_PLANESSANTAM_A1_A11", "Ahy_cytb_ET002_ELTRIUNFO_A1_A11", "Ahy_cytb_PSM01_PLANESSANTAM_A1_A11", "Ahy_cytb_ANC02_ELANCON_A1_A11", "Ahy_cytb_ANC03_ELANCON_A1_A11", "Ahy_cytb_ANC04_ELANCON_A1_A11", "Ahy_cytb_BAL02_BOCADELALAMO_A1_A11", "Ahy_cytb_BAL2-3_BOCADELALAMO2_A1_A11", "Ahy_cytb_BAL03_BOCADELALAMO_A1_A11", "Ahy_cytb_BAL05_BOCADELALAMO_A1_A11", "Ahy_cytb_PSM04_PLANESSANTAM_A1_A11", "Ahy_cytb_K23-1_KILOMETRO23_A1_A11", "Ahy_cytb_K23-5_KILOMETRO23_A1_A11", "Ahy_cytb_K46-3_KILOMETRO46_A1_A11", "Ahy_cytb_K23-2_KILOMETRO23_A1_A11", 
+"Ahy_cytb_K23-4_KILOMETRO23_A1_A11", "Ahy_cytb_K46-1_KILOMETRO46_A1_A11", "Ahy_cytb_K46-2_KILOMETRO46_A1_A11", "Ahy_cytb_COM35_COMITAN_A1_A11", "Ahy_cytb_COM40_COMITAN_A1_A11", "Ahy_cytb_PLC01_PLAYITACONCEP_A1_A11", "Ahy_cytb_TECO1_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO10_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO11_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO13_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO14_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO2_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO5_ELTECOLOTE_A1_A11", "Ahy_cytb_PSM03_PLANESSANTAM_A1_A11", "Ahy_cytb_PSM05_PLANESSANTAM_A1_A11", "Ahy_cytb_TECO20_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO3_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO9_ELTECOLOTE_A1_A11", "Ahy_cytb_K90-1_KILOMETRO90_A1_A11", "Ahy_cytb_COM24_COMITAN_A1_A11", "Ahy_cytb_COM30_COMITAN_A1_A11", "Ahy_cytb_COM37_COMITAN_A1_A11", "Ahy_cytb_COM31_COMITAN_A1_A11", "Ahy_cytb_COM33_COMITAN_A1_A11", "Ahy_cytb_ES2-13_ESANTO2_A1_A11", "Ahy_cytb_ES2-17_ESANTO2_A1_A11", "Ahy_cytb_ES2-19_ESANTO2_A1_A11", "Ahy_cytb_ES2-20_ESANTO2_A1_A11", "Ahy_cytb_ES2-22_ESANTO2_A1_A11", "Ahy_cytb_TECO12_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO7_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO15_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO17_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO16_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO4_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO8_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO19_ELTECOLOTE_A1_A11", "Ahy_cytb_TECO6_ELTECOLOTE_A1_A11"), 
+c("Ahy_cytb_EP01_ELPOTRERO_A1_A12", "Ahy_cytb_EP02_ELPOTRERO_A1_A12", "Ahy_cytb_EP03_ELPOTRERO_A1_A12", "Ahy_cytb_EP06_ELPOTRERO_A1_A12", "Ahy_cytb_EP07_ELPOTRERO_A1_A12", "Ahy_cytb_EP08_ELPOTRERO_A1_A12", "Ahy_cytb_K100-10_KILOMETRO100_A1_A12", "Ahy_cytb_BAJ13_ELBAJO_A1_A12", "Ahy_cytb_K100-01_KILOMETRO100_A1_A12", "Ahy_cytb_K100-02_KILOMETRO100_A1_A12", "Ahy_cytb_K100-05_KILOMETRO100_A1_A12", "Ahy_cytb_K100-11_KILOMETRO100_A1_A12", "Ahy_cytb_K100-21_KILOMETRO100_A1_A12", "Ahy_cytb_K100-23_KILOMETRO100_A1_A12", "Ahy_cytb_K100-03_KILOMETRO100_A1_A12", "Ahy_cytb_K100-19_KILOMETRO100_A1_A12", "Ahy_cytb_K100-24_KILOMETRO100_A1_A12", "Ahy_cytb_K100-07_KILOMETRO100_A1_A12", "Ahy_cytb_K100-12_KILOMETRO100_A1_A12", "Ahy_cytb_K100-14_KILOMETRO100_A1_A12", "Ahy_cytb_K23-3_KILOMETRO23_A1_A12", "Ahy_cytb_K55-1_KILOMETRO55_A1_A12", "Ahy_cytb_K55-3_KILOMETRO55_A1_A12", "Ahy_cytb_K90-3_KILOMETRO90_A1_A12", "Ahy_cytb_CON02_ELCONEJO_A1_A12", "Ahy_cytb_CON03_ELCONEJO_A1_A12", "Ahy_cytb_CON04_ELCONEJO_A1_A12", "Ahy_cytb_IHV01_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV02_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV03_PRESAIHUAZIL_A1_A12", "Ahy_cytb_IHV04_PRESAIHUAZIL_A1_A12", "Ahy_cytb_INS03_INSURGENTES_A1_A12", "Ahy_cytb_SCA01_SANCARLOS_A1_A12", "Ahy_cytb_SCA04_SANCARLOS_A1_A12", "Ahy_cytb_SCA02_SANCARLOS_A1_A12", "Ahy_cytb_LOM01_LOMA_A1_A12", "Ahy_cytb_SCA05_SANCARLOS_A1_A12", "Ahy_cytb_K100-18_KILOMETRO100_A1_A12", "Ahy_cytb_K100-20_KILOMETRO100_A1_A12", 
+"Ahy_cytb_K100-22_KILOMETRO100_A1_A12", "Ahy_cytb_K100-4_KILOMETRO100_A1_A12", "Ahy_cytb_K100-13_KILOMETRO100_A1_A12", "Ahy_cytb_K100-8_KILOMETRO100_A1_A12", "Ahy_cytb_K100-15_KILOMETRO100_A1_A12", "Ahy_cytb_K100-16_KILOMETRO100_A1_A12", "Ahy_cytb_RIT1_SANTARITA_A1_A12", "Ahy_cytb_RIT3_SANTARITA_A1_A12", "Ahy_cytb_RIT2_SANTARITA_A1_A12", "Ahy_cytb_RIT4_SANTARITA_A1_A12"), 
+c("Ahy_cytb_ICO01_ISLACORONADO_A1_A13", "Ahy_cytb_ICO03_ISLACORONADO_A1_A13", "Ahy_cytb_ICO04_ISLACORONADO_A1_A13", "Ahy_cytb_ICO10_ISLACORONADO_A1_A13", "Ahy_cytb_ICO11_ISLACORONADO_A1_A13", "Ahy_cytb_ICO15_ISLACORONADO_A1_A13", "Ahy_cytb_ICO18_ISLACORONADO_A1_A13", "Ahy_cytb_ICO21_ISLACORONADO_A1_A13", "Ahy_cytb_ICO02_ISLACORONADO_A1_A13", "Ahy_cytb_ICO05_ISLACORONADO_A1_A13", "Ahy_cytb_ICO06_ISLACORONADO_A1_A13", "Ahy_cytb_ICO07_ISLACORONADO_A1_A13", "Ahy_cytb_ICO08_ISLACORONADO_A1_A13", "Ahy_cytb_ICO12_ISLACORONADO_A1_A13", "Ahy_cytb_ICO19_ISLACORONADO_A1_A13", "Ahy_cytb_ICO20_ISLACORONADO_A1_A13", "Ahy_cytb_RDE01_RANCHODONENRIQUE_A1_A13", "Ahy_cytb_RDE02_RANCHODONENRIQUE_A1_A13", "Ahy_cytb_ICO16_ISLACORONADO_A1_A13", "Ahy_cytb_ICO17_ISLACORONADO_A1_A13", "Ahy_cytb_ICO9_ISLACORONADO_A1_A13", "Ahy_cytb_BAJ9_ELBAJO_A1_A13", "Ahy_cytb_ICO13_ISLACORONADO_A1_A13", "Ahy_cytb_BAJ11_ELBAJO_A1_A13", "Ahy_cytb_BAJ14_ELBAJO_A1_A13", "Ahy_cytb_BAJ22_ELBAJO_A1_A13"), 
+c("Ahy_cytb_PUR01_LAPURISIMA_A1_A14", "Ahy_cytb_PUR02_LAPURISIMA_A1_A14", "Ahy_cytb_PUR03_LAPURISIMA_A1_A14", "Ahy_cytb_AGV01_AGUAVERDE_A1_A14", "Ahy_cytb_INS01_INSURGENTES_A1_A14", "Ahy_cytb_INS02_INSURGENTES_A1_A14", "Ahy_cytb_AGV02_AGUAVERDE_A1_A14", "Ahy_cytb_AGV03_AGUAVERDE_A1_A14", "Ahy_cytb_AGV04_AGUAVERDE_A1_A14", "Ahy_cytb_JAV1_SANJAVIER_A1_A14", "Ahy_cytb_JAV2_SANJAVIER_A1_A14", "Ahy_cytb_JAV3_SANJAVIER_A1_A14", "Ahy_cytb_JAV5_SANJAVIER_A1_A14", "Ahy_cytb_BAJ10_ELBAJO_A1_A14", "Ahy_cytb_BAJ1_ELBAJO_A1_A14", "Ahy_cytb_BAJ12_ELBAJO_A1_A14", "Ahy_cytb_BAJ18_ELBAJO_A1_A14", "Ahy_cytb_BAJ19_ELBAJO_A1_A14", "Ahy_cytb_BAJ20_ELBAJO_A1_A14", "Ahy_cytb_BAJ3_ELBAJO_A1_A14", "Ahy_cytb_BAJ5_ELBAJO_A1_A14", "Ahy_cytb_BAJ6_ELBAJO_A1_A14", "Ahy_cytb_BAJ7_ELBAJO_A1_A14", "Ahy_cytb_BAJ8_ELBAJO_A1_A14", "Ahy_cytb_BAJ15_ELBAJO_A1_A14", "Ahy_cytb_BAJ17_ELBAJO_A1_A14", "Ahy_cytb_BAJ4_ELBAJO_A1_A14"), 
+c("Ahy_cytb_K100-39_KILOMETRO100_A1_A15"), 
+c("Ahy_cytb_CM01_COMITAN_A2_A2", "Ahy_cytb_CM03_COMITAN_A2_A2", "Ahy_cytb_CM06_COMITAN_A2_A2", "Ahy_cytb_CMO4_COMITAN_A2_A2", "Ahy_cytb_COM21_COMITAN_A2_A2", "Ahy_cytb_COM34_COMITAN_A2_A2", "Ahy_cytb_COM38_COMITAN_A2_A2", "Ahy_cytb_CM05_COMITAN_A2_A2", "Ahy_cytb_COM20_COMITAN_A2_A2", "Ahy_cytb_TS02_TODOSANTOS_A2_A2", "Ahy_cytb_TS04_TODOSANTOS_A2_A2", "Ahy_cytb_TS05_TODOSANTOS_A2_A2", "Ahy_cytb_TS06_TODOSANTOS_A2_A2", "Ahy_cytb_TS07_TODOSANTOS_A2_A2", "Ahy_cytb_TS08_TODOSANTOS_A2_A2", "Ahy_cytb_CSL03_CABOSANLUCAS_A2_A2", "Ahy_cytb_MIG01_MIGRINO_A2_A2", 
+"Ahy_cytb_SAS01_SANANTONIO_A2_A2", "Ahy_cytb_MIG02_MIGRINO_A2_A2", "Ahy_cytb_SAS02_SANANTONIO_A2_A2", "Ahy_cytb_STE02_SANTATERESITA_A2_A2", "Ahy_cytb_ANC01_ELANCON_A2_A2", "Ahy_cytb_ANC05_ELANCON_A2_A2", "Ahy_cytb_ET004_ELTRIUNFO_A2_A2", "Ahy_cytb_GASP1_GASPAREO_A2_A2", "Ahy_cytb_GASP2_GASPAREO_A2_A2", "Ahy_cytb_BUR02_LABURRERA_A2_A2", "Ahy_cytb_GASP3_GASPAREO_A2_A2", "Ahy_cytb_INO01_INOCENTES_A2_A2", "Ahy_cytb_INO02_INOCENTES_A2_A2", "Ahy_cytb_INO03_INOCENTES_A2_A2", "Ahy_cytb_INO04_INOCENTES_A2_A2", "Ahy_cytb_K55-2_KILOMETRO55_A2_A2", "Ahy_cytb_MIG04_MIGRINO_A2_A2", "Ahy_cytb_MIG05_MIGRINO_A2_A2", "Ahy_cytb_PLC02_PLAYITACONCEP_A2_A2", "Ahy_cytb_PLC03_PLAYITACONCEP_A2_A2", "Ahy_cytb_PLC04_PLAYITACONCEP_A2_A2", "Ahy_cytb_STE01_SANTATERESITA_A2_A2", "Ahy_cytb_BUR01_LABURRERA_A2_A2", "Ahy_cytb_BUR03_LABURRERA_A2_A2", "Ahy_cytb_COM19_COMITAN_A2_A2", "Ahy_cytb_COM22_COMITAN_A2_A2", "Ahy_cytb_COM23_COMITAN_A2_A2", "Ahy_cytb_COM26_COMITAN_A2_A2", "Ahy_cytb_COM28_COMITAN_A2_A2", "Ahy_cytb_COM29_COMITAN_A2_A2", "Ahy_cytb_COM32_COMITAN_A2_A2", "Ahy_cytb_COM36_COMITAN_A2_A2", "Ahy_cytb_COM2_COMITAN_A2_A2", "Ahy_cytb_COM27_COMITAN_A2_A2", "Ahy_cytb_COM25_COMITAN_A2_A2"), 
+c("Ahy_cytb_ISF01_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF02_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF03_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF04_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF05_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF06_ISLASANFRANCISCO_A3_A3", 
+"Ahy_cytb_ISF07_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISF08_ISLASANFRANCISCO_A3_A3", "Ahy_cytb_ISJ07_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ01_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ02_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ06_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ03_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ08_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ09_ISLASANJOSE_A3_A3", "Ahy_cytb_ISJ04_ISLASANJOSE_A3_A3"), 
+c("Ahy_cytb_IMO01_ISLAMONTSERRAT_A4_A4", "Ahy_cytb_IMO02_ISLAMONTSERRAT_A4_A4"),
+c("Ahy_cytb_BV01_BUENAVISTA_B_B", "Ahy_cytb_BV04_BUENAVISTA_B_B", "Ahy_cytb_BV02_BUENAVISTA_B_B", "Ahy_cytb_BV03_BUENAVISTA_B_B", "Ahy_cytb_BAL04_BOCADELALAMO_B_B", "Ahy_cytb_BAR01_SANBARTOLO_B_B", "Ahy_cytb_BAR03_SANBARTOLO_B_B", "Ahy_cytb_BV05_BUENAVISTA_B_B", "Ahy_cytb_CARD1_ELCARDONAL_B_B", "Ahy_cytb_BV06_BUENAVISTA_B_B", "Ahy_cytb_RIB02_LARIBERA_B_B", "Ahy_cytb_RIB03_LARIBERA_B_B", "Ahy_cytb_RIB04_LARIBERA_B_B", "Ahy_cytb_STG01_SANTIAGO_B_B", "Ahy_cytb_STG03_SANTIAGO_B_B", "Ahy_cytb_CARD2_ELCARDONAL_B_B", "Ahy_cytb_CPUL1_CABOPULMO_B_B", "Ahy_cytb_CPUL3_CABOPULMO_B_B", "Ahy_cytb_CSJ01_SANJOSECABO_B_B", "Ahy_cytb_CSJ02_SANJOSECABO_B_B", "Ahy_cytb_CSL01_CABOSANLUCAS_B_B", "Ahy_cytb_CSL02_CABOSANLUCAS_B_B", "Ahy_cytb_RIB01_LARIBERA_B_B", "Ahy_cytb_STG02_SANTIAGO_B_B", "Ahy_cytb_BAL2-1_BOCADELALAMO2_B_B", "Ahy_cytb_BAL2-2_BOCADELALAMO2_B_B", "Ahy_cytb_CNAR1_CAMINONARANJOS_B_B", "Ahy_cytb_CNAR2_CAMINONARANJOS_B_B", "Ahy_cytb_CNAR3_CAMINONARANJOS_B_B", "Ahy_cytb_CSJ03_SANJOSECABO_B_B", "Ahy_cytb_FORT2_FORTUNA_B_B", "Ahy_cytb_NARO6-4_CAMINONARANJOS_B_B", "Ahy_cytb_CSJ04_SANJOSECABO_B_B", "Ahy_cytb_CSL04_CABOSANLUCAS_B_B", "Ahy_cytb_FORT1_FORTUNA_B_B", "Ahy_cytb_FORT3_FORTUNA_B_B", "Ahy_cytb_LALINEA_LALINEA_B_B", "Ahy_cytb_NARO6-2_CAMINONARANJOS_B_B", "Ahy_cytb_NARO6-3_CAMINONARANJOS_B_B", "Ahy_cytb_NAR06-1_CAMINONARANJOS_B_B", "Ahy_cytb_BARB3_SANBARTOLOB_B_B"), 
+c("Ahy_cytb_LV01_LOSVIEJOS_C_C", "Ahy_cytb_PR02_PAREDONES_C_C", "Ahy_cytb_LV02_LOSVIEJOS_C_C", "Ahy_cytb_LV03_LOSVIEJOS_C_C", "Ahy_cytb_LV04_LOSVIEJOS_C_C", "Ahy_cytb_LV05_LOSVIEJOS_C_C", "Ahy_cytb_PR05_PAREDONES_C_C", "Ahy_cytb_LV06_LOSVIEJOS_C_C", "Ahy_cytb_PR01_PAREDONES_C_C", "Ahy_cytb_PR03_PAREDONES_C_C", "Ahy_cytb_PR04_PAREDONES_C_C", "Ahy_cytb_PR06_PAREDONES_C_C", "Ahy_cytb_LV13_LOSVIEJOS_C_C", "Ahy_cytb_LV14_LOSVIEJOS_C_C", "Ahy_cytb_LV15_LOSVIEJOS_C_C", "Ahy_cytb_LV16_LOSVIEJOS_C_C"), 
+c("Ahy_cytb_ICA01_ISLACARMEN_D_D", "Ahy_cytb_ICA02_ISLACARMEN_D_D", "Ahy_cytb_ICA03_ISLACARMEN_D_D", "Ahy_cytb_ICA05_ISLACARMEN_D_D", "Ahy_cytb_ICA06_ISLACARMEN_D_D", "Ahy_cytb_ICA07_ISLACARMEN_D_D", "Ahy_cytb_ICA04_ISLACARMEN_D_D") ))
+
+
+per_pop@region.data
+per_pop@region.data@biallelic.sites
+per_pop@region.data@biallelic.matrix
+per_pop@region.data@populations # pop with numbers
+per_pop@region.data@populations2 # pop with names
+per_pop@region.data@polyallelic.sites # no tenemos sitios con más de dos SNPs
+
+#Neutrality stats
+per_pop <- neutrality.stats(per_pop)
+get.neutrality(per_pop)[[1]]
+get.neutrality(per_pop)[[2]]
+get.neutrality(per_pop)[[3]]
+
+per_pop@Tajima.D[1,]
+per_pop@Fu.Li.F[1,]
+per_pop@Fu.Li.D
+per_pop@n.segregating.sites[1,]
+
+#Diversity stats
+per_pop <- F_ST.stats(per_pop)
+per_pop<- diversity.stats(per_pop)
+
+#Nucleotide diversity CAUTION!! The nucleotide diversity (average pairwise nucleotide differences) within and between the populations. 
+#Have to be divided by the slot per_pop@n.sites to obtain diversity per site (see also diversity.stats).
+per_pop@region.stats@nucleotide.diversity # Nucleotide diversity matrix
+per_pop@nuc.diversity.between # Nucleotide diversity between the populations (matrix ina list)
+per_pop@nuc.diversity.within/per_pop@n.sites # Nucleotide diversity within the populations
+
+#Haplotype diversity
+per_pop@region.stats@haplotype.diversity # Haplotype diversity matrix
+per_pop@hap.diversity.between # Haplotype diversity between the populations
+per_pop@hap.diversity.within # Haplotype diversity within the populations
+
+per_pop@region.stats@haplotype.counts # Esta matriz es muy fea, con poco sentido.
+
+
+#Fst
+per_pop@haplotype.F_ST #Fixation Index based on haplotype frequencies
+per_pop@nucleotide.F_ST #Fixation Index based on minor.allele frequencies
+hap.fst <- per_pop@hap.F_ST.vs.all[1,] #Fixation Index for each population against all other individuals (haplotype) this is NOT working! it gives you the same valur for all samples
+nuc.fst <-per_pop@nuc.F_ST.vs.all[1,] #Fixation Index for each population against tall other individuals (nucleotide)
+per.pop.pairwise.hap.fst <- per_pop@hap.F_ST.pairwise #Fixation Index for every pair of populations (haplotype)
+per.pop.pairwise.nuc.fst <- per_pop@nuc.F_ST.pairwise #Fixation Index for every pair of populations (nucleotide)
+
+```
+
+
+
+
+###GET stats to be recorded in the table per pop
+```{r}
+
+#1. Get number of individuals per pop (N)
+n.pop <- length(per_pop@populations)
+N <- vector(mode="numeric", length=0)
+for(i in 1:n.pop)
+{
+  N <- c(N, c(length(per_pop@populations[[i]]) ))
+}
+
+#2. Calculate haplotype count per population (H)
+#read fasta
+x <- read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop.fasta",format="fasta")
+
+#mi version
+x <- read.dna(file="/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_subsublin.fasta",format="fasta")
+#Calculate haplotypes
+h <- haplotype(x)
+#Calculate network
+net <- haploNet(h)
+#calculate matrix
+ind.hap <- as.data.frame(with(
+  stack(setNames(attr(h, "index"), rownames(h))), 
+  table(hap=ind, pop=rownames(x)[values]) ) )
+#Change matrix into lists
+Hap <-   filter (ind.hap, Freq>0) %>% group_by(., pop) %>% summarise(., H = n() ) #Counts how many aplotipes apprae per population
+count.Hap <- vector(mode="numeric", length=0)
+# order: "L_nw","L_po","L_nk","L_nv"
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A11")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A12")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A13")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A14")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A15")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A2")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A3")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_A4")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_B")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_C")%>%select(H)))
+count.Hap <- c(count.Hap, as.numeric(filter(Hap,pop == "Ahy_cytb_D")%>%select(H)))
+
+#3. Count segregating sites
+segregating.sites <- per_pop@n.segregating.sites[1,]
+
+
+#4. Haplotype diversity with sd
+Neih <- function(M,biasflag=0) {
+  #Returns unbiased h (Nei Eq 8.4, p.178) and var(h) (Nei Eq 8.12, p.180)
+  # Neih$h is vector of h values, Neih$varh is vector of var(h) values
+  #  M is a vector of haplotype counts, or matrix with pops in columns
+  #  if 'biasflag' is set >0, the biased version of the statistic is returned.
+  
+  N <- colSums(M)
+  m <- M;  for (i in 1:ncol(M)) { m[,i] <- m[,i]/N[i] }
+  
+  biasedh = 1 - colSums(m*m)
+  if (biasflag>0) {
+    h <- biasedh
+  } else {
+    h <- biasedh / (1 - 1/N)
+  }
+  
+  varh = 2/N/(N-1) * ( 2*(N-2)*(colSums(m^3)-colSums(m^2)^2) + colSums(m^2) - colSums(m^2)^2 )
+  
+  list(h=h,varh=varh)
+}
+library("pegas")
+
+#Calculate how each sample relate to the rest (PENDING!)
+#read fasta
+x <- read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop.fasta",format="fasta")
+
+#mi vesrion
+#read fasta
+x <- read.dna(file="/Users/jagodoy/Desktop/Reanalisis_Aspidoscelis_2018/Datasets/aspcytb315_612_subsublin.fasta",format="fasta")
+
+#Calculate haplotypes
+h <- haplotype(x)
+#Calculate network
+net <- haploNet(h)
+#calculate matrix 
+#cuidado! el orden es uno determinado
+#calculate matrix
+ind.hap <- as.data.frame(with(
+  stack(setNames(attr(h, "index"), rownames(h))), 
+  table(hap=ind, pop=rownames(x)[values]) ) ) %>% spread(. ,pop,Freq)
+rownames(ind.hap) <- ind.hap[,1]
+ind.hap <- ind.hap[,-1]
+#Cuidado!Necesitamos reordenar el orden es:
+ind.hap <- ind.hap[c("Ahy_cytb_A11", "Ahy_cytb_A12", "Ahy_cytb_A13", "Ahy_cytb_A14", "Ahy_cytb_A15", "Ahy_cytb_A2", "Ahy_cytb_A3", "Ahy_cytb_A4", "Ahy_cytb_B", "Ahy_cytb_C", "Ahy_cytb_D")]
+M<- as.matrix.data.frame(ind.hap)
+Hd <- Neih(M)$h[seq(1,11)]
+Hd.sd <- sqrt(Neih(M)$varh)[seq(1,11)]
+
+
+#5. Nucleotide diversity with sd
+library("ape")
+pi_ya <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ya.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_ki <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ki.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_vl <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-vl.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_tu <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-tu.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_mo <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-mo.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_cr <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-cr.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_la <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-la.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_po <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-po.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_no <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-no.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_ba <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ba.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+pi_ur <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ur.fasta",format="fasta"), 
+                   variance = TRUE, pairwise.deletion = FALSE)
+
+
+Pi <- c(pi_ya[1], pi_ki[1], pi_vl[1], pi_tu[1], pi_mo[1], pi_cr[1], pi_la[1], pi_po[1], pi_no[1], pi_ba[1], pi_ur[1])
+Pi.var <- c(pi_ya[2], pi_ki[2], pi_vl[2], pi_tu[2], pi_mo[2], pi_cr[2], pi_la[2], pi_po[2], pi_no[2], pi_ba[2], pi_ur[2])
+Pi.sd <- sqrt(Pi.var)
+#6. Get K, The nucleotide diversity (average pairwise nucleotide differences) within and between the populations.
+K <- per_pop@nuc.diversity.within[1,]
+
+#7. Get tajima's D and p-values
+tajimaD_ya <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ya.fasta", format="fasta"))
+tajimaD_ki <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ki.fasta", format="fasta"))
+tajimaD_vl <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-vl.fasta", format="fasta"))
+tajimaD_tu <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-tu.fasta", format="fasta"))
+tajimaD_mo <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-mo.fasta", format="fasta"))
+tajimaD_cr <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-cr.fasta", format="fasta"))
+tajimaD_la <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-la.fasta", format="fasta"))
+tajimaD_po <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-po.fasta", format="fasta"))
+tajimaD_no <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-no.fasta", format="fasta"))
+tajimaD_ba <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ba.fasta", format="fasta"))
+tajimaD_ur <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_pop-ur.fasta", format="fasta"))
+
+tajimaD <- c(tajimaD_ya$D, tajimaD_ki$D, tajimaD_vl$D, tajimaD_tu$D, tajimaD_mo$D, tajimaD_cr$D, tajimaD_la$D, tajimaD_po$D, tajimaD_no$D, tajimaD_ba$D, tajimaD_ur$D)
+tajimaD.pvalue <- c(tajimaD_ya$Pval.normal, tajimaD_ki$Pval.normal, tajimaD_vl$Pval.normal, tajimaD_tu$Pval.normal, tajimaD_mo$Pval.normal, tajimaD_cr$Pval.normal, tajimaD_la$Pval.normal, tajimaD_po$Pval.normal, tajimaD_no$Pval.normal, tajimaD_ba$Pval.normal, tajimaD_ur$Pval.normal ) 
+
+#8. Fu and Li F
+Fu.Li.F <- per_pop@Fu.Li.F[1,]
+
+```
+
+
+###Stats TOTAL
+```{r}
+
+total <- readData("/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/fasta")
+get.sum.data(total)
+get.individuals(total)
+total <- set.populations(total,list(
+c("c_ll_ya_0138", "c_ll_ya_0139", "c_ll_ya_0140", "c_ll_ya_0142", "c_ll_ya_0143", "c_ll_ya_0145", "c_ll_ya_0146", "c_ll_ya_0147", "c_ll_ki_0086", "c_ll_ki_0088", "c_ll_ki_0090", "c_ll_ki_0091", "c_ll_ki_0092", "c_ll_ki_0093", "c_ll_ki_0094", "c_ll_ki_0095", "c_ll_ki_0096", "c_ll_ki_0097", "c_ll_ki_0098", "c_ll_ki_0099", "c_ll_ki_0100", "c_ll_ki_0101", "c_ll_ki_0102", "c_ll_vl_0107", "c_ll_vl_0108", "c_ll_vl_0109", "c_ll_vl_0110", "c_ll_vl_0112", "c_ll_vl_0113", "c_ll_vl_0128", "c_ll_vl_0132", "c_ll_tu_0153", "c_ll_tu_0157", "c_ll_tu_0158", "c_ll_tu_0159", "c_ll_tu_0165", "c_ll_tu_0166", "c_ll_mo_0181", "c_ll_mo_0184", "c_ll_mo_0186", "c_ll_mo_0187", "c_ll_mo_0188", "c_ll_mo_0189", "c_ll_mo_0190", "c_ll_mo_0191", "c_ll_cr_0205", "c_ll_cr_0206", "c_ll_cr_0207", "c_ll_cr_0208", "c_ll_cr_0209", "c_ll_cr_0212", "c_ll_la_0044", "c_ll_la_0047", "c_ll_la_0048", "c_ll_la_0052", "c_ll_la_0053", "c_ll_la_0054", "c_ll_po_0001", "c_ll_po_0002", "c_ll_po_0003", "c_ll_po_0004", "c_ll_po_0005", "c_ll_po_0007", "c_ll_po_0010", "c_ll_po_0011", "c_ll_po_0014", "c_ll_po_0017", "c_ll_po_0019", "c_ll_po_0105", "c_ll_po_0106", "c_ll_no_0063", "c_ll_no_0064", "c_ll_no_0065", "c_ll_no_0068", "c_ll_no_0069", "c_ll_no_0070", "c_ll_no_0071", "c_ll_no_0072", "c_ll_no_0074", "c_ll_no_0075", "c_ll_no_0076", "c_ll_no_0077", "c_ll_no_0078", "c_ll_no_0079", "c_ll_no_0080", "c_ll_no_0081", "c_ll_no_0082", "c_ll_ba_0214", "c_ll_ba_0215", "c_ll_ba_0216", "c_ll_ur_0194", "c_ll_ur_0195", "c_ll_ur_0196", "c_ll_ur_0199", "c_ll_ur_0200", "c_ll_ur_0203")
+))
+
+
+#Neutrality stats
+total <- neutrality.stats(total)
+
+
+#Diversity stats
+total <- F_ST.stats(total)
+total<- diversity.stats(total)
+
+hap.fst <- append(hap.fst, total@hap.F_ST.vs.all[1,]) #Fixation Index for each population against all other individuals (haplotype) this is NOT working! it gives you the same valur for all samples
+nuc.fst <-append(nuc.fst, total@nuc.F_ST.vs.all[1,]) #Fixation Index for each population against tall other individuals (nucleotide)
+
+```
+
+###GET stats to be recorded in the table as TOTAL
+```{r}
+
+#1. Get number of individuals per pop (N)
+n.pop <- length(total@populations)
+Ntot <- vector(mode="numeric", length=0)
+for(i in 1:n.pop)
+{
+  Ntot <- c(Ntot, c(length(total@populations[[i]]) ))
+}
+N<-append(N, Ntot)
+
+#2. Calculate haplotype count per population (H)
+#read fasta
+x <- read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_all.fasta",format="fasta")
+#Calculate haplotypes
+h <- haplotype(x)
+#Calculate network
+net <- haploNet(h)
+#calculate matrix
+ind.hap <- as.data.frame(with(
+  stack(setNames(attr(h, "index"), rownames(h))), 
+  table(hap=ind, pop=rownames(x)[values]) ) )
+#Change matrix into lists
+Hap <-  ind.hap %>% filter ( Freq>0) %>% group_by(., pop) %>% summarise(., H = n() ) #Counts how many haplotipes apprae per population
+# order: "L_nw","L_po","L_nk","L_nv", "total"
+count.Hap <- append( count.Hap,  as.numeric(filter(Hap,pop == "sample")%>%select(H)))
+
+
+#3. Count segregating sites
+segregating.sites <- append(segregating.sites, total@n.segregating.sites[1,])
+
+
+#4. Haplotype diversity with sd
+Neih <- function(M,biasflag=0) {
+  #Returns unbiased h (Nei Eq 8.4, p.178) and var(h) (Nei Eq 8.12, p.180)
+  # Neih$h is vector of h values, Neih$varh is vector of var(h) values
+  #  M is a vector of haplotype counts, or matrix with pops in columns
+  #  if 'biasflag' is set >0, the biased version of the statistic is returned.
+  
+  N <- colSums(M)
+  m <- M;  for (i in 1:ncol(M)) { m[,i] <- m[,i]/N[i] }
+  
+  biasedh = 1 - colSums(m*m)
+  if (biasflag>0) {
+    h <- biasedh
+  } else {
+    h <- biasedh / (1 - 1/N)
+  }
+  
+  varh = 2/N/(N-1) * ( 2*(N-2)*(colSums(m^3)-colSums(m^2)^2) + colSums(m^2) - colSums(m^2)^2 )
+  
+  list(h=h,varh=varh)
+}
+library("pegas") 
+
+M <-  matrix(with(
+  stack(setNames(attr(h, "index"), rownames(h))), 
+  table(hap=ind, pop=rownames(x)[values]) ),ncol=1, byrow=F) 
+Hd <- append(Hd, Neih(M)$h[c(1)]) 
+Hd.sd <- append(Hd.sd, sqrt(Neih(M)$varh)[c(1)] ) 
+
+
+#5. Nucleotide diversity with sd
+library("ape")
+pi_tot <- nuc.div(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_all.fasta",format="fasta"), 
+                    variance = TRUE, pairwise.deletion = FALSE)
+
+
+Pi <- append(Pi, pi_tot[1])
+Pi.var <- append(Pi.var, pi_tot[2])
+Pi.sd <- append(Pi.sd,sqrt(pi_tot[2]))
+#6. Get K, The nucleotide diversity (average pairwise nucleotide differences) within and between the populations.
+K <- append(K, total@nuc.diversity.within[1,]) 
+
+#7. Get tajima's D and p-values
+tajimaD_tot <- tajima.test(read.dna(file="/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/haplotypes/ll_mitogenome_variants_withNs_noRS_ingroup_w_new_Balcans_wo_highNs_reordered2_wo_bibliography_mongoliarenamed_all.fasta",format="fasta"))
+
+tajimaD <- append(tajimaD,  tajimaD_tot$D)
+tajimaD.pvalue <- append(tajimaD.pvalue, tajimaD_tot$Pval.normal) 
+
+#8. Fu and Li F
+Fu.Li.F <- append(Fu.Li.F, total@Fu.Li.F[1,])
+
+```
+
+
+###Create dataframe
+Lo calculo identico al por época para hacer rbind
+```{r}
+
+Population <- 
+c("Yakutia","Kirov","Vladivostok","Tuva", "Mongolia", "Carpatian", "Latvia", "Poland", "Norway", "Balcans", "Urals", "Total")
+
+
+stats.per.pop <- data.frame( Population, N, count.Hap,segregating.sites, Hd, Hd.sd, Pi, Pi.sd,K, tajimaD, tajimaD.pvalue, Fu.Li.F, hap.fst, nuc.fst)
+
+write.csv(stats.per.pop, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/tables/diversity_and_differentiation.csv", row.names=FALSE)
+
+```
+
+
+
+##PLOTS
+Multiple plot function
+
+ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+- cols:   Number of columns in layout
+- layout: A matrix specifying the layout. If present, 'cols' is ignored.
+
+If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+then plot 1 will go in the upper left, 2 will go in the upper right, and
+3 will go all the way across the bottom.
+
+```{r}
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  require(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+###############################################################################################################################################################
+
+# Plot genetic stats.per.pop of each pop
+# I can charge direcly fron here if just drawing
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+stats.per.pop <- read.csv("/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/tables/diversity_and_differentiation.csv",header=T,dec=".") %>% arrange(Pi)
+
+#Lo dibujo:
+#
+par(mar = c(5, 5, 1, 1), mgp = c(3.5, 2, 0), xaxs= "i", yaxs= "i", bty="l")
+
+# using ggplot2 
+pd <- position_dodge(.1) # move them .05 to the left and right
+stats.per.pop$Population <- factor(stats.per.pop$Population, levels=as.vector(stats.per.pop$Population))
+
+#Plot Haplotype diversity
+ggplot(stats.per.pop, aes(x=Population, y=Hd)) + 
+  geom_errorbar(aes(ymin=Hd-Hd.sd, ymax=Hd+Hd.sd), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd)+
+  theme_bw() +
+  #scale_colour_manual(values=c("red","black","blue"))+
+  theme(axis.title.x = element_text(face="bold", size=20),axis.text.x = element_text(angle = 90, hjust = 1, size=20))+
+  theme(axis.title.y = element_text(face="bold", size=20),axis.text.y = element_text( hjust = 1, size=20))+
+  ggtitle("Haplotype diversity")+ 
+  theme(legend.text=element_text(size=20),plot.title=element_text(size=20))+
+  theme(legend.justification=c(1,1), legend.position = "bottom")
+
+
+dev.print(device=postscript, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/Hd_plot.eps", onefile=FALSE, horizontal=FALSE)
+
+
+
+# Plot Nucleotide diversity
+ggplot(stats.per.pop, aes(x=Population, y=Pi)) + 
+  geom_errorbar(aes(ymin=Pi-Pi.sd, ymax=Pi+Pi.sd), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd)+
+  theme_bw() +
+  #scale_colour_manual(values=c("red","black","blue"))+
+  theme(axis.title.x = element_text(face="bold", size=20),axis.text.x = element_text(angle = 90, hjust = 1, size=20))+
+  theme(axis.title.y = element_text(face="bold", size=20),axis.text.y = element_text( hjust = 1, size=20))+
+  ggtitle("Nucleotide diversity")+ 
+  theme(legend.text=element_text(size=20),plot.title=element_text(size=20) )+
+  theme(legend.justification=c(1,1), legend.position="bottom") 
+
+dev.print(device=postscript, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/Pi_plot.eps", onefile=FALSE, horizontal=FALSE)
+
+# Plot FST
+ggplot(stats.per.pop, aes(x=Population, y=hap.fst) ) + 
+  geom_point(position=pd, size = 3)+
+  theme_bw() +
+  scale_colour_manual(values=c("red","black","blue"))+
+  theme(axis.title.x = element_text(face="bold", size=20),axis.text.x = element_text(angle = 90, hjust = 1, size=20))+
+  theme(axis.title.y = element_text(face="bold", size=20),axis.text.y = element_text( hjust = 1, size=20))+
+  ggtitle("Genetic differentiation")+ 
+  theme(legend.text=element_text(size=20),plot.title=element_text(size=20))+
+  theme(legend.justification=c(1,0), legend.position=c(1,0)) #legend top rigth
+
+dev.print(device=postscript, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/FST_hap_plot.eps", onefile=FALSE, horizontal=FALSE)
+
+ggplot(stats.per.pop, aes(x=Population, y=nuc.fst) ) + 
+  geom_point(position=pd, size = 3)+
+  theme_bw() +
+  # scale_colour_manual(values=c("red","black","blue"))+
+  theme(axis.title.x = element_text(face="bold", size=20),axis.text.x = element_text(angle = 90, hjust = 1, size=20))+
+  theme(axis.title.y = element_text(face="bold", size=20),axis.text.y = element_text( hjust = 1, size=20))+
+  ggtitle("Genetic differentiation")+ 
+  theme(legend.text=element_text(size=20),plot.title=element_text(size=20))+
+  theme(legend.justification=c(1,0), legend.position=c(1,0)) #legend top rigth
+
+dev.print(device=postscript, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/FST_nuc_plot.eps", onefile=FALSE, horizontal=FALSE)
+
+
+# Plot K Average number of nucleotide differences
+ggplot(stats.per.pop, aes(x=Population, y=K) ) + 
+  geom_point(position=pd, size = 3)+
+  theme_bw() +
+  # scale_colour_manual(values=c("red","black","blue"))+
+  theme(axis.title.x = element_text(face="bold", size=20),axis.text.x = element_text(angle = 90, hjust = 1, size=20))+
+  theme(axis.title.y = element_text(face="bold", size=20),axis.text.y = element_text( hjust = 1, size=20))+
+  ggtitle("Average number of nucleotide differences")+ 
+  theme(legend.text=element_text(size=20),plot.title=element_text(size=20))+
+  theme(legend.justification=c(1,1), legend.position=c(1,1)) #legend top rigth
+
+dev.print(device=postscript, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/K_plot.eps", onefile=FALSE, horizontal=FALSE)
+
+#Put all plots together (reusing the legend)
+#Plot Haplotype diversity
+p1<-ggplot(stats.per.pop, aes(x=Population, y=Hd)) + 
+  geom_errorbar(aes(ymin=Hd-Hd.sd, ymax=Hd+Hd.sd), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd)+
+  theme_bw() +
+  # scale_colour_manual(values=c("red","black","blue")) + theme(legend.position="none") +
+  theme( axis.text.x = element_blank(),axis.title.x = element_blank()) +
+  theme(axis.title.y = element_text(face="bold", size=7),axis.text.y = element_text( hjust = 1, size=7))+
+  ggtitle("Haplotype diversity")+ 
+  theme(plot.title=element_text(size=7, face="bold"))
+
+
+# Plot Nucleotide diversity
+p2<-ggplot(stats.per.pop, aes(x=Population, y=Pi)) + 
+  geom_errorbar(aes(ymin=Pi-Pi.sd, ymax=Pi+Pi.sd), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd)+
+  theme_bw() +
+  # scale_colour_manual(values=c("red","black","blue")) + theme(legend.position="none") +
+  theme( axis.text.x = element_blank(),axis.title.x = element_blank())+
+  theme(axis.title.y = element_text(face="bold", size=7),axis.text.y = element_text( hjust = 1, size=6))+
+  ggtitle("Nucleotide diversity")+ 
+  theme(plot.title=element_text(size=7, face="bold") )
+
+
+
+# Plot FST
+p3<-ggplot(stats.per.pop, aes(x=Population, y=nuc.fst) ) + 
+  geom_point(position=pd)+
+  theme_bw() +
+  # scale_colour_manual(values=c("red","black","blue")) + theme(legend.position="none") +
+  theme(axis.title.x = element_text(face="bold", size=7),axis.text.x = element_text(angle = 90, hjust = 1, size=7))+
+  theme(axis.title.y = element_text(face="bold", size=7),axis.text.y = element_text( hjust = 1, size=7))+
+  ggtitle("Genetic differentiation")+ 
+  theme(plot.title=element_text(size=7, face="bold"))
+
+
+
+# Plot K Average number of nucleotide differences
+p4<-ggplot(stats.per.pop, aes(x=Population, y=K) ) + 
+  geom_point(position=pd)+
+  theme_bw() +
+  # scale_colour_manual(values=c("red","black","blue")) + theme(legend.position="none") +
+  theme(axis.title.x = element_text(face="bold", size=7),axis.text.x = element_text(angle = 90, hjust = 1, size=7))+
+  theme(axis.title.y = element_text(face="bold", size=7),axis.text.y = element_text( hjust = 1, size=7))+
+  ggtitle("Average number of nucleotide differences")+ 
+  theme(plot.title=element_text(size=7, face="bold"))
+
+multiplot(p1, p3, p2, p4, cols=2)
+dev.print(device=postscript, "/Users/Elena/ownCloud/Eurasian_lynx_phylogeography/mitogenomes_lynxes/diversity_neutrality_and_differentiation/stats_plot.eps", onefile=FALSE, horizontal=FALSE)
+
+
+```
